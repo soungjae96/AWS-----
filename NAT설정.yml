@@ -1,0 +1,178 @@
+Parameters:
+  KeyName:
+    Description: already Keypair take my hands
+    Type: AWS::EC2::KeyPair::KeyName
+    ConstraintDescription: if somethings worng this messages print here
+
+Resources:
+  VPC1:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.40.0.0/16
+      Tags:
+        - Key: Name
+          Value: VPC1
+  
+  IGW1:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: IGW1
+
+  IGWAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref IGW1
+      VpcId: !Ref VPC1
+
+  PubRT:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC1
+      Tags:
+        - Key: Name
+          Value: PubRT
+  
+  PubRoute:
+    Type: AWS::EC2::Route
+    DependsOn: IGWAttachment
+    Properties:
+      RouteTableId: !Ref PubRT
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref IGW1
+
+  PubSN:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC1
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: 10.40.1.0/24
+      Tags:
+        - Key: Name
+          Value: PubSN-1
+
+  NATPublicSNRouteTableAssociation1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PubRT
+      SubnetId: !Ref PubSN
+
+  PriRT:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC1
+      Tags:
+        - Key: Name
+          Value: PriRT
+
+  PriSN:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC1
+      AvailabilityZone: !Select [2, !GetAZs '']
+      CidrBlock: 10.40.2.0/24
+      Tags:
+        - Key: Name
+          Value: PriSN-1
+
+  NATNetaPrivateSNRouteTableAssociation2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PriRT
+      SubnetId: !Ref PriSN
+
+  NATENI:
+    Type: AWS::EC2::NetworkInterface
+    Properties:
+      SubnetId: !Ref PubSN
+      Description: Instance1 eth0
+      GroupSet:
+      - !Ref MySG
+      PrivateIpAddress: 10.40.1.100
+      Tags:
+        - Key: Name
+          Value: NAT-Instance eth0
+
+  EIP1:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+
+  VPCAssociateEIP1:
+    Type: AWS::EC2::EIPAssociation
+    DependsOn: EC21
+    Properties:
+      AllocationId: !GetAtt EIP1.AllocationId
+      NetworkInterfaceId: !Ref NATENI
+
+  NATRoute1:
+    Type: AWS::EC2::Route
+    DependsOn: EC21
+    Properties:
+      RouteTableId: !Ref PriRT
+      DestinationCidrBlock: 0.0.0.0/0
+      NetworkInterfaceId: !Ref NATENI
+
+  MySG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Enable SSH access via port 22
+      VpcId: !Ref VPC1
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: '22'
+        ToPort: '22'
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: '80'
+        ToPort: '80'
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: icmp
+        FromPort: '-1'
+        ToPort: '-1'
+        CidrIp: 0.0.0.0/0
+
+  EC21:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-0c2d3e23e757b5d84
+      InstanceType: t2.micro
+      KeyName: !Ref KeyName
+      SourceDestCheck: False
+      Tags:
+        - Key: Name
+          Value: NAT-EC2
+      NetworkInterfaces:
+        - DeviceIndex: 0
+          NetworkInterfaceId: !Ref NATENI
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          hostname NAT-Instance
+          yum -y install tcpdump iptraf
+
+  EC22:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-0d6e6a06d11d7777d
+      InstanceType: t2.micro
+      KeyName: !Ref KeyName
+      Tags:
+        - Key: Name
+          Value: NATPrivateEC22
+      NetworkInterfaces:
+        - DeviceIndex: 0
+          SubnetId: !Ref PriSN
+          GroupSet:
+            - !Ref MySG
+          AssociatePublicIpAddress: False
+          PrivateIpAddress: 10.40.2.101
+      UserData:
+        Fn::Base64:
+          !Sub |
+            #!/bin/bash
+            amazon-linux-extras install epel -y
+            yum install httpd -y
+            systemctl enable --now httpd
+            echo "<h1>Test Web Server</h1>" > /var/www/html/index.html
