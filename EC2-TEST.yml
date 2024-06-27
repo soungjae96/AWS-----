@@ -1,0 +1,45 @@
+Parameters:
+  KeyName:
+    Description: already Keypair take my hands
+    Type: AWS::EC2::KeyPair::KeyName
+    ConstraintDescription: if somethings worng this messages print here
+  
+Resources:
+  HomeInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-0d6e6a06d11d7777d
+      InstanceType: t2.micro
+      KeyName: !Ref KeyName
+      Tags:
+        - Key: Name
+          Value: HomeEC2-Test
+        - Key: Home
+          Value: MyComputers
+      SecurityGroups:
+        - !Ref MySG
+      UserData:
+        Fn::Base64:
+          !Sub |
+            #!/bin/bash
+            amazon-linux-extras install epel -y
+            yum install -y httpd
+            systemctl enable --now httpd
+            echo "<h1>Hello World AWS First Server</h1>" > /var/www/html/index.html
+            
+  MySG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: this SecurityGroup is Test Group in my home
+      GroupName: MyHomeGroup
+      SecurityGroupIngress:
+      - CidrIp: 0.0.0.0/0
+        Description: HTTP free
+        IpProtocol: tcp
+        ToPort: 80
+        FromPort: 80
+      - CidrIp: 0.0.0.0/0
+        Description: SSH free
+        IpProtocol: tcp
+        ToPort: 22
+        FromPort: 22
