@@ -1,0 +1,203 @@
+Parameters:
+  KeyName:
+    Description: Name of an existing EC2 keyPair to enable SSH access to the instance
+    Type: AWS::EC2::KeyPair::KeyName
+    ConstraintDescription: must be the name of an existing EC2 KeyPair.
+    
+Resources:
+  IngressVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      CidrBlock: 10.40.0.0/16
+      Tags:
+        - Key: Name
+          Value: VPCingressRouting
+
+  IGW1:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: VPCIR-IGW
+
+  IGWAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref IGW1
+      VpcId: !Ref IngressVPC
+
+  DMZPubRT:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref IngressVPC
+      Tags:
+        - Key: Name
+          Value: CloudNeta-public-RT
+
+  InnerPubRT:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref IngressVPC
+      Tags:
+        - Key: Name
+          Value: CloudNeta-public-RT        
+
+  DMZPubRoute:
+    Type: AWS::EC2::Route
+    DependsOn: IGWAttachment
+    Properties:
+      RouteTableId: !Ref DMZPubRT
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref IGW1
+
+  InnerPubRoute:
+    Type: AWS::EC2::Route
+    DependsOn: IGWAttachment
+    Properties:
+      RouteTableId: !Ref InnerPubRT
+      DestinationCidrBlock: 0.0.0.0/0
+      NetworkInterfaceId: !Ref MiddleBoxENI
+     #InstanceId 를 써도 되지만 Instance가 삭제되면 고장나서
+     #가급적이면 ENI에 붙이는게 좋음
+  DMZPubSN:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref IngressVPC
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: 10.40.1.0/24
+      Tags:
+        - Key: Name
+          Value: DMZ-PubSubnet
+
+  InnerPubSN:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref IngressVPC
+      AvailabilityZone: !Select [2, !GetAZs '']
+      CidrBlock: 10.40.2.0/24
+      Tags:
+        - Key: Name
+          Value: Inner-PubSubnet
+
+  DMZPubSNRTAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref DMZPubRT
+      SubnetId: !Ref DMZPubSN
+
+  InnerPubSNRTAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref InnerPubRT
+      SubnetId: !Ref InnerPubSN
+
+  MiddleBoxENI:
+    Type: AWS::EC2::NetworkInterface
+    Properties:
+      SubnetId: !Ref DMZPubSN
+      Description: Instance1 eth0
+      GroupSet:
+      - !Ref MySG
+      PrivateIpAddress: 10.40.1.100
+      Tags:
+        - Key: Name
+          Value: MiddleBox
+
+  VPCEIP1:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+
+  VPCAssociateEIP1:
+    Type: AWS::EC2::EIPAssociation
+    DependsOn: MiddleBox
+    Properties:
+      AllocationId: !GetAtt VPCEIP1.AllocationId
+      NetworkInterfaceId: !Ref MiddleBoxENI
+
+  MySG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref IngressVPC
+      GroupDescription: Enable HTTP access via port 80 and SSH access via port 22
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 80
+        ToPort: 80
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: icmp
+        FromPort: '-1'
+        ToPort: '-1'
+        CidrIp: 0.0.0.0/0
+
+  MiddleBox:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-0c2d3e23e757b5d84
+      InstanceType: t2.micro
+      KeyName: !Ref KeyName
+      SourceDestCheck: False
+      Tags:
+        - Key: Name
+          Value: DMZ-Public-EC2
+      NetworkInterfaces:
+        - DeviceIndex: 0
+          NetworkInterfaceId: !Ref MiddleBoxENI
+
+  InnerPubClient1:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-0d6e6a06d11d7777d
+      InstanceType: t2.micro
+      KeyName: !Ref KeyName
+      Tags:
+        - Key: Name
+          Value: Inner-Client1-EC2
+      NetworkInterfaces:
+        - DeviceIndex: 0
+          SubnetId: !Ref InnerPubSN
+          GroupSet:
+            - !Ref MySG
+          AssociatePublicIpAddress: true
+      UserData:
+        Fn::Base64:
+          !Sub |
+            #!/bin/bash
+            amazon-linux-extras install epel -y
+            yum install httpd -y
+            systemctl enable --now httpd
+            echo "<h1>Test Web Server</h1>" > /var/www/html/index.html
+
+  InnerPubClient2:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-0d6e6a06d11d7777d
+      InstanceType: t2.micro
+      KeyName: !Ref KeyName
+      Tags:
+        - Key: Name
+          Value: Inner-Client2-EC2
+      NetworkInterfaces:
+        - DeviceIndex: 0
+          SubnetId: !Ref InnerPubSN
+          GroupSet:
+            - !Ref MySG
+          AssociatePublicIpAddress: true
+      UserData:
+        Fn::Base64:
+          !Sub |
+            #!/bin/bash
+            amazon-linux-extras install epel -y
+            yum install httpd -y
+            systemctl enable --now httpd
+            echo "<h1>Test Web Server</h1>" > /var/www/html/index.html            

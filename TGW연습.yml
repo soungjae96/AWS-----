@@ -1,0 +1,622 @@
+Parameters:
+  KeyName:
+    Description: Name of an existing EC2 keyPair to enable SSH access to the instance
+    Type: AWS::EC2::KeyPair::KeyName
+    ConstraintDescription: must be the name of an existing EC2 KeyPair.
+    
+Resources:
+####################################################################
+# VPC 0
+  VPC0:
+    Type: AWS::EC2::VPC
+    Properties:
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      CidrBlock: 10.0.0.0/16
+      Tags:
+        - Key: Name
+          Value: VPC0
+# VPC 1
+  VPC1:
+    Type: AWS::EC2::VPC
+    Properties:
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      CidrBlock: 10.10.0.0/16
+      Tags:
+        - Key: Name
+          Value: VPC1
+# VPC 2
+  VPC2:
+    Type: AWS::EC2::VPC
+    Properties:
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      CidrBlock: 10.20.0.0/16
+      Tags:
+        - Key: Name
+          Value: VPC2
+####################################################################
+# IGW
+  # IGW
+  IGW:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: IGW
+
+  IGWAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref IGW
+      VpcId: !Ref VPC0
+####################################################################
+# RT
+  # VPC 0 Public RT
+  VPC0PublicRT:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC0
+      Tags:
+        - Key: Name
+          Value: VPC0-public-RT
+  # VPC 0 Private RT
+  VPC0PrivateRT:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC0
+      Tags:
+        - Key: Name
+          Value: VPC0-private-RT
+  # VPC 1 Private RT
+  VPC1PrivateRT:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC1
+      Tags:
+        - Key: Name
+          Value: VPC1-private-RT
+  # VPC 1 Private RT 2
+  VPC1PrivateRT2:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC1
+      Tags:
+        - Key: Name
+          Value: VPC1-private-RT-2
+  # VPC 2 Private RT
+  VPC2PrivateRT:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC2
+      Tags:
+        - Key: Name
+          Value: VPC2-private-RT
+  # VPC 2 Private RT 2
+  VPC2PrivateRT2:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC2
+      Tags:
+        - Key: Name
+          Value: VPC2-private-RT-2
+  # VPC 0 Public RT Default Route
+  VPC0DefaultPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: IGWAttachment
+    Properties:
+      RouteTableId: !Ref VPC0PublicRT
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref IGW
+####################################################################
+# SN
+  # VPC 0 Public SN      
+  VPC0PublicSN:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC0
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: 10.0.1.0/24
+      Tags:
+        - Key: Name
+          Value: VPC0-Public-SN-1
+  # VPC 0 Public SN 2  
+  VPC0PublicSN2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC0
+      AvailabilityZone: !Select [2, !GetAZs '']
+      CidrBlock: 10.0.2.0/24
+      Tags:
+        - Key: Name
+          Value: VPC0-Public-SN-2
+  # VPC 0 Private SN
+  VPC0PrivateSN:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC0
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: 10.0.3.0/24
+      Tags:
+        - Key: Name
+          Value: VPC0-Private-SN-1
+  # VPC 0 Private SN 2
+  VPC0PrivateSN2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC0
+      AvailabilityZone: !Select [2, !GetAZs '']
+      CidrBlock: 10.0.4.0/24
+      Tags:
+        - Key: Name
+          Value: VPC0-Private-SN-2
+  # VPC 1 Private SN
+  VPC1PrivateSN:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC1
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: 10.10.1.0/24
+      Tags:
+        - Key: Name
+          Value: VPC1-Private-SN-1
+  # VPC 1 Private SN 2
+  VPC1PrivateSN2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC1
+      AvailabilityZone: !Select [2, !GetAZs '']
+      CidrBlock: 10.10.2.0/24
+      Tags:
+        - Key: Name
+          Value: VPC1-Private-SN-2
+  # VPC 1 Private SN 3
+  VPC1PrivateSN3:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC1
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: 10.10.3.0/24
+      Tags:
+        - Key: Name
+          Value: VPC1-Private-SN-3
+  # VPC 1 Private SN 4
+  VPC1PrivateSN4:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC1
+      AvailabilityZone: !Select [2, !GetAZs '']
+      CidrBlock: 10.10.4.0/24
+      Tags:
+        - Key: Name
+          Value: VPC1-Private-SN-4
+  # VPC 2 Private SN
+  VPC2PrivateSN:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC2
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: 10.20.1.0/24
+      Tags:
+        - Key: Name
+          Value: VPC2-Private-SN-1
+  # VPC 2 Private SN 2
+  VPC2PrivateSN2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC2
+      AvailabilityZone: !Select [2, !GetAZs '']
+      CidrBlock: 10.20.2.0/24
+      Tags:
+        - Key: Name
+          Value: VPC2-Private-SN-2
+  # VPC 2 Private SN 3
+  VPC2PrivateSN3:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC2
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: 10.20.3.0/24
+      Tags:
+        - Key: Name
+          Value: VPC2-Private-SN-3
+  # VPC 2 Private SN 4
+  VPC2PrivateSN4:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC2
+      AvailabilityZone: !Select [2, !GetAZs '']
+      CidrBlock: 10.20.4.0/24
+      Tags:
+        - Key: Name
+          Value: VPC2-Private-SN-4
+####################################################################
+# SN + RT Association 
+  # Public 1
+  VPC0PublicSNRTAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref VPC0PublicRT
+      SubnetId: !Ref VPC0PublicSN
+  # Public 2
+  VPC0PublicSNRTAssociation2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref VPC0PublicRT
+      SubnetId: !Ref VPC0PublicSN2
+  # VPC 0 Private 1
+  VPC0PrivateSNRTAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref VPC0PrivateRT
+      SubnetId: !Ref VPC0PrivateSN
+  # VPC 0 Private 1
+  VPC0PrivateSNRTAssociation2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref VPC0PrivateRT
+      SubnetId: !Ref VPC0PrivateSN2
+  # VPC 1 Private 1
+  VPC1PrivateSNRTAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref VPC1PrivateRT
+      SubnetId: !Ref VPC1PrivateSN
+  # VPC 1 Private 1
+  VPC1PrivateSNRTAssociation2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref VPC1PrivateRT
+      SubnetId: !Ref VPC1PrivateSN2
+  # VPC 1 Private 3
+  VPC1PrivateSNRTAssociation3:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref VPC1PrivateRT2
+      SubnetId: !Ref VPC1PrivateSN3
+  # VPC 1 Private 4
+  VPC1PrivateSNRTAssociation4:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref VPC1PrivateRT2
+      SubnetId: !Ref VPC1PrivateSN4
+  # VPC 2 Private 1
+  VPC2PrivateSNRTAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref VPC2PrivateRT
+      SubnetId: !Ref VPC2PrivateSN
+  # VPC 2 Private 1
+  VPC2PrivateSNRTAssociation2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref VPC2PrivateRT
+      SubnetId: !Ref VPC2PrivateSN2
+  # VPC 2 Private 3
+  VPC2PrivateSNRTAssociation3:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref VPC2PrivateRT2
+      SubnetId: !Ref VPC2PrivateSN3
+  # VPC 2 Private 4
+  VPC2PrivateSNRTAssociation4:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref VPC2PrivateRT2
+      SubnetId: !Ref VPC2PrivateSN4
+####################################################################
+# Security Groups
+  # VPC 0 SG
+  VPC0SG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref VPC0
+      GroupDescription: Enable HTTP access via port 80 and SSH access via port 22
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 80
+        ToPort: 80
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: icmp
+        FromPort: '-1'
+        ToPort: '-1'
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: 3128
+        ToPort: 3128
+        CidrIp: 0.0.0.0/0
+  # VPC 1 SG
+  VPC1SG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref VPC1
+      GroupDescription: Enable HTTP access via port 80 and SSH access via port 22
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: icmp
+        FromPort: '-1'
+        ToPort: '-1'
+        CidrIp: 0.0.0.0/0
+  # VPC 2 SG
+  VPC2SG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref VPC2
+      GroupDescription: Enable HTTP access via port 80 and SSH access via port 22
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: icmp
+        FromPort: '-1'
+        ToPort: '-1'
+        CidrIp: 0.0.0.0/0
+
+####################################################################
+# EC2 
+  # VPC 0 Public EC2 01
+  VPC0PublicEC21:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-0d6e6a06d11d7777d
+      InstanceType: t2.micro
+      KeyName: !Ref KeyName
+      Tags:
+        - Key: Name
+          Value: VPC0-Public-EC2-1
+      NetworkInterfaces:
+        - DeviceIndex: 0
+          SubnetId: !Ref VPC0PublicSN
+          GroupSet:
+            - !Ref VPC0SG
+          AssociatePublicIpAddress: true 
+          PrivateIpAddress: 10.0.1.10
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          hostnamectl --static set-hostname VPC0Instance1
+          amazon-linux-extras install epel -y
+          yum install -y tcpdump squid
+          cat <<EOT > /etc/squid/squid.conf
+          http_port 3128
+          acl all src 0.0.0.0/0
+          http_access allow all
+          http_access deny all
+          EOT
+          systemctl start squid && systemctl enable squid
+          cat <<EOT > /home/ec2-user/list.txt
+          10.0.1.10
+          10.10.1.10
+          10.10.2.10
+          10.20.1.10
+          10.20.2.10
+          EOT
+          yum install httpd -y
+          systemctl start httpd && systemctl enable httpd
+          echo "<h1>TGW Lab - MgMt Server1</h1>" > /var/www/html/index.html
+          curl -o /home/ec2-user/pingall.sh https://cloudneta-book.s3.ap-northeast-2.amazonaws.com/chapter6/pingall.sh --silent
+          cp /home/ec2-user/pingall.sh /var/www/html/pingall.sh
+          cp /home/ec2-user/list.txt /var/www/html/list.txt
+          chmod +x /home/ec2-user/pingall.sh
+  # VPC 1 Private EC2 01
+  VPC1PrivateEC21:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-0d6e6a06d11d7777d
+      InstanceType: t2.micro
+      KeyName: !Ref KeyName
+      Tags:
+        - Key: Name
+          Value: VPC1-Private-EC2-1
+      NetworkInterfaces:
+        - DeviceIndex: 0
+          SubnetId: !Ref VPC1PrivateSN
+          GroupSet:
+            - !Ref VPC1SG
+          PrivateIpAddress: 10.10.1.10
+  # VPC 1 Private EC2 02
+  VPC1PrivateEC22:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-0d6e6a06d11d7777d
+      InstanceType: t2.micro
+      KeyName: !Ref KeyName
+      Tags:
+        - Key: Name
+          Value: VPC1-Private-EC2-2
+      NetworkInterfaces:
+        - DeviceIndex: 0
+          SubnetId: !Ref VPC1PrivateSN2
+          GroupSet:
+            - !Ref VPC1SG
+          PrivateIpAddress: 10.10.2.10
+  # VPC 2 Private EC2 01
+  VPC2PrivateEC21:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-0d6e6a06d11d7777d
+      InstanceType: t2.micro
+      KeyName: !Ref KeyName
+      Tags:
+        - Key: Name
+          Value: VPC2-Private-EC2-1
+      NetworkInterfaces:
+        - DeviceIndex: 0
+          SubnetId: !Ref VPC2PrivateSN
+          GroupSet:
+            - !Ref VPC2SG
+          PrivateIpAddress: 10.20.1.10
+  # VPC 2 Private EC2 02
+  VPC2PrivateEC22:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-0d6e6a06d11d7777d
+      InstanceType: t2.micro
+      KeyName: !Ref KeyName
+      Tags:
+        - Key: Name
+          Value: VPC2-Private-EC2-2
+      NetworkInterfaces:
+        - DeviceIndex: 0
+          SubnetId: !Ref VPC2PrivateSN2
+          GroupSet:
+            - !Ref VPC2SG
+          PrivateIpAddress: 10.20.2.10
+###################################################################
+# EndPoint
+  # Cloudformation EndPoint
+  EndPoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref VPC0
+      VpcEndpointType: 'Interface'
+      PrivateDnsEnabled: true
+      SecurityGroupIds: 
+        - !Ref VPC0SG
+      SubnetIds:
+        - !Ref VPC0PublicSN
+        - !Ref VPC0PublicSN2
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.cloudformation'
+###################################################################
+# TGW
+  # VPC 0 TGW
+  TransitGateway1:
+    Type: AWS::EC2::TransitGateway
+    Properties:
+     Tags:
+      - Key: Name
+        Value: TGW1
+###################################################################
+# TGW RT
+  # Blue RT
+  TransitGatewayRT2:
+    Type: AWS::EC2::TransitGatewayRouteTable
+    Properties:
+      Tags:
+        - Key: Name
+          Value: TGW-Blue-RT
+      TransitGatewayId: !Ref TransitGateway1
+  # Red RT
+  TransitGatewayRT3:
+    Type: AWS::EC2::TransitGatewayRouteTable
+    Properties:
+      Tags:
+        - Key: Name
+          Value: TGW-Red-RT
+      TransitGatewayId: !Ref TransitGateway1
+###################################################################
+# TGW RT Attachement
+  TransitATTRT1:
+    Type: AWS::EC2::TransitGatewayRouteTableAssociation
+    Properties:
+      TransitGatewayAttachmentId: !Ref TransitGatewayAtt2
+      TransitGatewayRouteTableId: !Ref TransitGatewayRT2
+  TransitATTRT2:
+    Type: AWS::EC2::TransitGatewayRouteTableAssociation
+    Properties:
+      TransitGatewayAttachmentId: !Ref TransitGatewayAtt3
+      TransitGatewayRouteTableId: !Ref TransitGatewayRT3
+###################################################################
+# TGW RT 경로 설정
+  # Blue RT
+  TransitRTPropagation1:
+    Type: AWS::EC2::TransitGatewayRouteTablePropagation
+    Properties:
+      TransitGatewayAttachmentId: !Ref TransitGatewayAtt2
+      TransitGatewayRouteTableId: !Ref TransitGatewayRT2
+  TransitRTPropagation2:
+    Type: AWS::EC2::TransitGatewayRouteTablePropagation
+    Properties:
+      TransitGatewayAttachmentId: !Ref TransitGatewayAtt1
+      TransitGatewayRouteTableId: !Ref TransitGatewayRT2
+  # Red RT
+  TransitRTPropagation3:
+    Type: AWS::EC2::TransitGatewayRouteTablePropagation
+    Properties:
+      TransitGatewayAttachmentId: !Ref TransitGatewayAtt3
+      TransitGatewayRouteTableId: !Ref TransitGatewayRT3
+  TransitRTPropagation4:
+    Type: AWS::EC2::TransitGatewayRouteTablePropagation
+    Properties:
+      TransitGatewayAttachmentId: !Ref TransitGatewayAtt1
+      TransitGatewayRouteTableId: !Ref TransitGatewayRT3
+###################################################################
+# TGW Attachment
+  # VPC 0
+  TransitGatewayAtt1:
+    Type: AWS::EC2::TransitGatewayAttachment
+    DependsOn: VPC0
+    Properties:
+      VpcId: !Ref VPC0
+      SubnetIds:
+        - !Ref VPC0PrivateSN
+        - !Ref VPC0PrivateSN2
+      TransitGatewayId: !Ref TransitGateway1
+      Tags:
+        - Key: Name
+          Value: TGW1-ATT1-VPC0
+  #VPC 1
+  TransitGatewayAtt2:
+    Type: AWS::EC2::TransitGatewayAttachment
+    DependsOn: VPC1
+    Properties:
+      VpcId: !Ref VPC1
+      SubnetIds:
+        - !Ref VPC1PrivateSN3
+        - !Ref VPC1PrivateSN4
+      TransitGatewayId: !Ref TransitGateway1
+      Tags:
+        - Key: Name
+          Value: TGW1-ATT1-VPC1
+  #VPC 2
+  TransitGatewayAtt3:
+    Type: AWS::EC2::TransitGatewayAttachment
+    DependsOn: VPC2
+    Properties:
+      VpcId: !Ref VPC2
+      SubnetIds:
+        - !Ref VPC2PrivateSN3
+        - !Ref VPC2PrivateSN4
+      TransitGatewayId: !Ref TransitGateway1
+      Tags:
+        - Key: Name 
+          Value: TGW1-ATT1-VPC2
+###################################################################
+# VPC Route
+  # VPC 0
+  VPC0Route:
+    Type: AWS::EC2::Route
+    DependsOn: TransitGatewayAtt1
+    Properties:
+      RouteTableId: !Ref VPC0PublicRT
+      DestinationCidrBlock: 10.0.0.0/8
+      TransitGatewayId: !Ref TransitGateway1
+  # VPC 1
+  VPC1Route:
+    Type: AWS::EC2::Route
+    DependsOn: TransitGatewayAtt2
+    Properties:
+      RouteTableId: !Ref VPC1PrivateRT
+      DestinationCidrBlock: 10.0.0.0/8
+      TransitGatewayId: !Ref TransitGateway1
+  # VPC 2
+  VPC2Route:
+    Type: AWS::EC2::Route
+    DependsOn: TransitGatewayAtt3
+    Properties:
+      RouteTableId: !Ref VPC2PrivateRT
+      DestinationCidrBlock: 10.0.0.0/8
+      TransitGatewayId: !Ref TransitGateway1

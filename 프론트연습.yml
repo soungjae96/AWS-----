@@ -1,0 +1,377 @@
+Parameters:
+  KeyName:
+    Description: Name of an existing EC2 keyPair to enable SSH access to the instance
+    Type: AWS::EC2::KeyPair::KeyName
+    ConstraintDescription: must be the name of an existing EC2 KeyPair.
+    
+Resources:
+  SanpaVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      CidrBlock: 10.0.0.0/16
+      Tags:
+        - Key: Name
+          Value: Sanpa-VPC
+
+  SanpaIGW:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: Sanpa-IGW
+
+  SanpaIGWAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref SanpaIGW
+      VpcId: !Ref SanpaVPC
+
+  SanpaPublicRT:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref SanpaVPC
+      Tags:
+        - Key: Name
+          Value: Sanpa-public-RT
+
+  SanpaPrivateRT:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref SanpaVPC
+      Tags:
+        - Key: Name
+          Value: Sanpa-Private-RT
+
+  SanpaPrivateRT2:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref SanpaVPC
+      Tags:
+        - Key: Name
+          Value: Sanpa-Private-RT2
+
+  SanpaPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: SanpaIGWAttachment
+    Properties:
+      RouteTableId: !Ref SanpaPublicRT
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref SanpaIGW
+      
+  SanpaPublicSN:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref SanpaVPC
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: 10.0.1.0/24
+      Tags:
+        - Key: Name
+          Value: Sanpa-Public-SN-1
+
+  SanpaPublicSN2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref SanpaVPC
+      AvailabilityZone: !Select [2, !GetAZs '']
+      CidrBlock: 10.0.2.0/24
+      Tags:
+        - Key: Name
+          Value: Sanpa-Public-SN-2
+
+  SanpaPrivateSN:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref SanpaVPC
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: 10.0.3.0/24
+      Tags:
+        - Key: Name
+          Value: Sanpa-Private-SN-1
+
+  SanpaPrivateSN2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref SanpaVPC
+      AvailabilityZone: !Select [2, !GetAZs '']
+      CidrBlock: 10.0.4.0/24
+      Tags:
+        - Key: Name
+          Value: Sanpa-Private-SN-2
+  
+  SanpaPublicSNRouteTableAssociation1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref SanpaPublicRT
+      SubnetId: !Ref SanpaPublicSN
+
+  SanpaPublicSNRouteTableAssociation2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref SanpaPublicRT
+      SubnetId: !Ref SanpaPublicSN2
+
+  SanpaPrivateSNRouteTableAssociation1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref SanpaPrivateRT
+      SubnetId: !Ref SanpaPrivateSN
+
+  SanpaPrivateSNRouteTableAssociation2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref SanpaPrivateRT2
+      SubnetId: !Ref SanpaPrivateSN2
+
+  ALBTG:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: ALB-TG
+      Port: 80
+      Protocol: HTTP
+      # ALB를 만들때 HealthCheck 항목을 넣지 않으면 
+      # 설정한 기본트래픽 설정으로 체크함
+      VpcId: !Ref SanpaVPC
+      Targets:
+        - Id: !Ref SanpaWebEC21
+          Port: 80
+        - Id: !Ref SanpaWebEC22
+          Port: 80
+
+  ALB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    DependsOn: SanpaIGWAttachment
+    Properties:
+      Name: My-ALB
+      Scheme: internet-facing
+      Subnets:
+        - !Ref SanpaPublicSN
+        - !Ref SanpaPublicSN2
+      SecurityGroups:
+        - !Ref WebSG
+
+  ALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref ALBTG
+      LoadBalancerArn: !Ref ALB
+      Port: 80
+      Protocol: HTTP
+
+  MySG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref SanpaVPC
+      GroupDescription: Enable HTTP access via port 80 and SSH access via port 22
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 80
+        ToPort: 80
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        CidrIp: 0.0.0.0/0
+
+  WebSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref SanpaVPC
+      GroupDescription: Enable HTTP access via port 80 and SSH access via port 22
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 80
+        ToPort: 80
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        CidrIp: 0.0.0.0/0
+        
+  SanpaENI:
+    Type: AWS::EC2::NetworkInterface
+    Properties:
+      SubnetId: !Ref SanpaPublicSN
+      Description: Instance1 eth0
+      GroupSet:
+      - !Ref MySG
+      PrivateIpAddress: 10.0.1.100
+      Tags:
+        - Key: Name
+          Value: NAT-Instance eth0
+
+  SanpaEIP1:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+
+  VPCAssociateEIP1:
+    Type: AWS::EC2::EIPAssociation
+    DependsOn: SanpaEC21
+    Properties:
+      AllocationId: !GetAtt SanpaEIP1.AllocationId
+      NetworkInterfaceId: !Ref SanpaENI
+
+  NATRoute1:
+    Type: AWS::EC2::Route
+    DependsOn: SanpaEC21
+    Properties:
+      RouteTableId: !Ref SanpaPrivateRT
+      DestinationCidrBlock: 0.0.0.0/0
+      NetworkInterfaceId: !Ref SanpaENI
+
+  SanpaENI2:
+    Type: AWS::EC2::NetworkInterface
+    Properties:
+      SubnetId: !Ref SanpaPublicSN2
+      Description: Instance1 eth0
+      GroupSet:
+      - !Ref MySG
+      PrivateIpAddress: 10.0.2.100
+      Tags:
+        - Key: Name
+          Value: NAT-Instance eth0
+
+  SanpaEIP2:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+
+  VPCAssociateEIP2:
+    Type: AWS::EC2::EIPAssociation
+    DependsOn: SanpaEC22
+    Properties:
+      AllocationId: !GetAtt SanpaEIP2.AllocationId
+      NetworkInterfaceId: !Ref SanpaENI2
+
+  NATRoute2:
+    Type: AWS::EC2::Route
+    DependsOn: SanpaEC22
+    Properties:
+      RouteTableId: !Ref SanpaPrivateRT2
+      DestinationCidrBlock: 0.0.0.0/0
+      NetworkInterfaceId: !Ref SanpaENI2
+
+  SanpaDNS:
+    Type: AWS::Route53::HostedZone
+    Properties:
+      Name: park508.com
+      HostedZoneConfig:
+        Comment: Public hosted zone for park508.com
+
+  RecordSet:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      Name: www.park508.com
+      Type: A
+      TTL: 30
+      HostedZoneId: !Ref SanpaDNS  
+      ResourceRecords:
+        - !GetAtt SanpaEC21.PublicIp
+
+  SanpaEC21:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-09cb25eec461870b7 # 상파울루 용 NAT ami
+      InstanceType: t2.micro
+      KeyName: !Ref KeyName
+      SourceDestCheck: False
+      Tags:
+        - Key: Name
+          Value: Sanpa-NAT-EC2-01
+      NetworkInterfaces:
+        - DeviceIndex: 0
+          NetworkInterfaceId: !Ref SanpaENI
+      UserData:
+        Fn::Base64:
+          !Sub |
+            #!/bin/bash
+            hostname Sanpa-NAT-01
+
+  SanpaEC22:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-09cb25eec461870b7 # 상파울루 용 NAT ami
+      InstanceType: t2.micro
+      KeyName: !Ref KeyName
+      SourceDestCheck: False
+      Tags:
+        - Key: Name
+          Value: Sanpa-Public-EC2-02
+      NetworkInterfaces:
+        - DeviceIndex: 0
+          NetworkInterfaceId: !Ref SanpaENI2
+      UserData:
+        Fn::Base64:
+          !Sub |
+            #!/bin/bash
+            hostname Sanpa-NAT-01
+
+  SanpaWebEC21:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-0d2b872bd98d125e5 # 상파울루 용 기본 ami
+      InstanceType: t2.micro
+      KeyName: !Ref KeyName
+      Tags:
+        - Key: Name
+          Value: Sanpa-Public-EC2
+      NetworkInterfaces:
+        - DeviceIndex: 0
+          SubnetId: !Ref SanpaPrivateSN
+          GroupSet:
+            - !Ref WebSG
+      UserData:
+        Fn::Base64:
+          !Sub |
+            #!/bin/bash
+            amazon-linux-extras install epel -y
+            yum install httpd -y
+            systemctl enable --now httpd
+            echo "<h1>Test Web Server</h1>" > /var/www/html/index.html
+            wget https://cloudneta.github.io/test.jpg
+            wget -P /usr/share/nginx/html/ https://cloudneta.github.io/test.jpg
+            amazon-linux-extras install -y nginx1.12
+            echo "<head><link rel='icon' href='data:;base64,iVBORw0KGgo='></head><h1>CloudNet@ CloudFront Test 1 !!</h1><img src='test.jpg'>" > /usr/share/nginx/html/index.html
+            systemctl start nginx
+            systemctl enable nginx
+
+  SanpaWebEC22:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-0d2b872bd98d125e5 # 상파울루 용 기본 ami
+      InstanceType: t2.micro
+      KeyName: !Ref KeyName
+      Tags:
+        - Key: Name
+          Value: Sanpa-Public-EC2
+      NetworkInterfaces:
+        - DeviceIndex: 0
+          SubnetId: !Ref SanpaPrivateSN2
+          GroupSet:
+            - !Ref WebSG
+      UserData:
+        Fn::Base64:
+          !Sub |
+            #!/bin/bash
+            amazon-linux-extras install epel -y
+            yum install httpd -y
+            systemctl enable --now httpd
+            echo "<h1>Test Web Server</h1>" > /var/www/html/index.html
+            wget https://cloudneta.github.io/test.jpg
+            wget -P /usr/share/nginx/html/ https://cloudneta.github.io/test.jpg
+            amazon-linux-extras install -y nginx1.12
+            echo "<head><link rel='icon' href='data:;base64,iVBORw0KGgo='></head><h1>CloudNet@ CloudFront Test 2 !!</h1><img src='test.jpg'>" > /usr/share/nginx/html/index.html
+            systemctl start nginx
+            systemctl enable nginx

@@ -1,0 +1,275 @@
+Parameters:
+  KeyName:
+    Description: Name of an existing EC2 keyPair to enable SSH access to the instance
+    Type: AWS::EC2::KeyPair::KeyName
+    ConstraintDescription: must be the name of an existing EC2 KeyPair.
+########################################################
+Resources:
+########################################################
+  # Sydney VPC
+  SydneyVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      CidrBlock: 10.3.0.0/16
+      Tags:
+        - Key: Name
+          Value: Sydney-VPC
+########################################################
+  # Sydney IGW
+  SydneyIGW:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: Sydney-IGW
+  SydneyIGWAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref SydneyIGW
+      VpcId: !Ref SydneyVPC
+########################################################
+# RT
+  # Public RT
+  SydneyPublicRT:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref SydneyVPC
+      Tags:
+        - Key: Name
+          Value: Sydney-public-RT
+  # Private RT
+  SydneyPrivateRT:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref SydneyVPC
+      Tags:
+        - Key: Name
+          Value: Sydney-Private-RT
+
+  SydneyPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: SydneyIGWAttachment
+    Properties:
+      RouteTableId: !Ref SydneyPublicRT
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref SydneyIGW
+######################################################## 
+# SN
+  # Public SN
+  SydneyPublicSN:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref SydneyVPC
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: 10.3.1.0/24
+      Tags:
+        - Key: Name
+          Value: Sydney-Public-SN-1
+  # Private SN
+  SydneyPrivateSN:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref SydneyVPC
+      AvailabilityZone: !Select [2, !GetAZs '']
+      CidrBlock: 10.3.2.0/24
+      Tags:
+        - Key: Name
+          Value: Sydney-Private-SN-1
+########################################################
+# SN + RT
+  SydneyPublicSNRouteTableAssociation1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref SydneyPublicRT
+      SubnetId: !Ref SydneyPublicSN
+  SydneyPrivateSNRouteTableAssociation1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref SydneyPrivateRT
+      SubnetId: !Ref SydneyPrivateSN
+########################################################
+# NAT ENI
+  SydneyENI:
+    Type: AWS::EC2::NetworkInterface
+    Properties:
+      SubnetId: !Ref SydneyPublicSN
+      Description: Sydney eth0
+      GroupSet:
+      - !Ref MySG
+      PrivateIpAddress: 10.3.1.100
+      Tags:
+        - Key: Name
+          Value: NAT-Instance eth0
+  VPCEIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+  SydneyAssociateEIP:
+    Type: AWS::EC2::EIPAssociation
+    DependsOn: NATEC21
+    Properties:
+      AllocationId: !GetAtt VPCEIP.AllocationId
+      NetworkInterfaceId: !Ref SydneyENI
+  NATRoute:
+    Type: AWS::EC2::Route
+    DependsOn: NATEC21
+    Properties:
+      RouteTableId: !Ref SydneyPrivateRT
+      DestinationCidrBlock: 0.0.0.0/0
+      NetworkInterfaceId: !Ref SydneyENI
+########################################################
+# SG
+  # NAT
+  MySG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref SydneyVPC
+      GroupDescription: Enable HTTP access via port 80 and SSH access via port 22
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 80
+        ToPort: 80
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: 53
+        ToPort: 53
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: icmp
+        FromPort: '-1'
+        ToPort: '-1'
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: udp
+        FromPort: 53
+        ToPort: 53
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: 3306
+        ToPort: 3306
+        CidrIp: 0.0.0.0/0
+  # WEB
+  WebSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref SydneyVPC
+      GroupDescription: Enable HTTP access via port 80 and SSH access via port 22
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 80
+        ToPort: 80
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: icmp
+        FromPort: '-1'
+        ToPort: '-1'
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: udp
+        FromPort: 53
+        ToPort: 53
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: 53
+        ToPort: 53
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: 3306
+        ToPort: 3306
+        CidrIp: 0.0.0.0/0
+########################################################
+# EC2
+  # NAT EC2
+  NATEC21:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-052551c6a7f47b714
+      InstanceType: t2.micro
+      KeyName: !Ref KeyName
+      SourceDestCheck: False
+      Tags:
+        - Key: Name
+          Value: NAT-EC2-01
+      NetworkInterfaces:
+        - DeviceIndex: 0
+          NetworkInterfaceId: !Ref SydneyENI
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          hostname NAT-EC2-01
+          yum -y install tcpdump iptraf
+  # Private Web
+  WebEC21:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-06bbf0bc3c7055d18
+      InstanceType: t2.micro
+      KeyName: !Ref KeyName
+      Tags:
+        - Key: Name
+          Value: Web-EC2-01
+      NetworkInterfaces:
+        - DeviceIndex: 0
+          SubnetId: !Ref SydneyPrivateSN
+          PrivateIpAddress: 10.3.2.100
+          GroupSet:
+            - !Ref WebSG
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          hostname Web-EC2-01
+          amazon-linux-extras install epel -y
+          yum install httpd -y
+          systemctl enable --now httpd
+          cat << 'EOF' > /var/www/html/index.php
+          <?php
+              $con = mysqli_connect("db.idc.internal", "user1", "p@ssw0rd");
+              if (mysqli_connect_error($con)) {
+                  echo "MySQL 접속 실패 !!<br>";
+                  echo "오류 원인 : " . mysqli_connect_error();
+                  exit();
+              }
+              echo "MySQL 접속 완전히 성공 3 !!";
+              mysqli_close($con);
+          ?>
+          EOF
+
+########################################################
+# Private DNS
+  PrivateDNS:
+    Type: AWS::Route53::HostedZone
+    DependsOn: SydneyVPC
+    Properties:
+      HostedZoneConfig:
+        Comment: Private hosted zone for sydney.net
+      Name: sydney.internal
+      VPCs:
+        - VPCId: !Ref SydneyVPC
+          VPCRegion: ap-southeast-2
+      HostedZoneTags:
+        - Key: Name
+          Value: sydneydomain
+
+  PrivateRecordSet:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      Name: websrv1.sydney.internal
+      Type: A
+      TTL: 30
+      HostedZoneId: !Ref PrivateDNS  # 프라이빗 호스티드 존 이름을 사용
+      ResourceRecords:
+        - !GetAtt WebEC21.PrivateIp

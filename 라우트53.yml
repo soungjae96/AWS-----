@@ -1,0 +1,355 @@
+Parameters:
+  KeyName:
+    Description: Name of an existing EC2 keyPair to enable SSH access to the instance
+    Type: AWS::EC2::KeyPair::KeyName
+    ConstraintDescription: must be the name of an existing EC2 KeyPair.
+    
+Resources:
+  MyVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      CidrBlock: 10.0.0.0/16
+      Tags:
+        - Key: Name
+          Value: My-VPC
+
+  MyIGW:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: My-IGW
+
+  MyIGWAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref MyIGW
+      VpcId: !Ref MyVPC
+
+  MyRT:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref MyVPC
+      Tags:
+        - Key: Name
+          Value: My-public-RT
+
+  MyRoute:
+    Type: AWS::EC2::Route
+    DependsOn: MyIGWAttachment
+    Properties:
+      RouteTableId: !Ref MyRT
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref MyIGW
+      
+  MySN:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref MyVPC
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: 10.0.0.0/24
+      Tags:
+        - Key: Name
+          Value: My-Public-SN-01
+
+  MySN2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref MyVPC
+      AvailabilityZone: !Select [2, !GetAZs '']
+      CidrBlock: 10.0.1.0/24
+      Tags:
+        - Key: Name
+          Value: My-Public-SN-02
+
+  MySNRouteTableAssociation1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref MyRT
+      SubnetId: !Ref MySN
+
+  MySNRouteTableAssociation2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref MyRT
+      SubnetId: !Ref MySN2
+
+  MyENI:
+    Type: AWS::EC2::NetworkInterface
+    Properties:
+      SubnetId: !Ref MySN
+      Description: My eth0
+      GroupSet:
+      - !Ref MySG
+      PrivateIpAddress: 10.0.0.100
+      Tags:
+        - Key: Name
+          Value: My-eth0
+
+  MyEIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+
+  MyAssociateEIP:
+    Type: AWS::EC2::EIPAssociation
+    DependsOn: MyEC21
+    Properties:
+      AllocationId: !GetAtt MyEIP.AllocationId
+      NetworkInterfaceId: !Ref MyENI
+
+  MyENI2:
+    Type: AWS::EC2::NetworkInterface
+    Properties:
+      SubnetId: !Ref MySN2
+      Description: My eth0
+      GroupSet:
+      - !Ref MySG
+      PrivateIpAddress: 10.0.1.100
+      Tags:
+        - Key: Name
+          Value: My-eth0
+
+  MyEIP2:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+
+  MyAssociateEIP2:
+    Type: AWS::EC2::EIPAssociation
+    DependsOn: MyEC22
+    Properties:
+      AllocationId: !GetAtt MyEIP2.AllocationId
+      NetworkInterfaceId: !Ref MyENI2
+
+  MySG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref MyVPC
+      GroupDescription: Enable HTTP access via port 80 and SSH access via port 22
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 80
+        ToPort: 80
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: udp
+        FromPort: 161
+        ToPort: 161
+        CidrIp: 0.0.0.0/0
+
+  ALBTG:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: HTTP-TG
+      Port: 80
+      Protocol: HTTP 
+      # ALB를 만들때 HealthCheck 항목을 넣지 않으면 
+      # 설정한 기본트래픽 설정으로 체크함
+      VpcId: !Ref MyVPC
+      Targets:
+        - Id: !Ref MyEC21
+          Port: 80
+        - Id: !Ref MyEC22
+          Port: 80
+
+  ALB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    DependsOn: MyIGWAttachment
+    Properties:
+      Name: My-ALB
+      Scheme: internet-facing
+      Subnets:
+        - !Ref MySN
+        - !Ref MySN2
+      SecurityGroups:
+        - !Ref MySG
+
+  ALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref ALBTG
+      LoadBalancerArn: !Ref ALB
+      Port: 80
+      Protocol: HTTP
+
+  SNMPTG:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: SNMP-TG
+      Port: 161       # 리스너에게 전달받을 Port 번호
+      Protocol: UDP
+      HealthCheckPort: 80  # 타겟에 헬스 체크 할 Port 번호
+      VpcId: !Ref MyVPC
+      Targets:
+        - Id: !Ref MyEC21
+          Port: 161        # 실제 타겟에 연결 해줄때 Port 번호
+        - Id: !Ref MyEC22
+          Port: 161        # 실제 타겟에 연결 해줄때 Port 번호
+#   만약 Port 번호를 8080으로 바꿨다면 8080으로 해줘야 함 
+  NLB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    DependsOn: MyIGWAttachment
+    Properties:
+      Type: network
+      Name: My-NLB
+      Scheme: internet-facing
+      Subnets:
+        - !Ref MySN
+        - !Ref MySN2
+      Tags:
+        - Key: Name
+          Value: SNMP-NLB
+
+  NLBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref SNMPTG
+      LoadBalancerArn: !Ref NLB
+      Port: 161       # 트래픽으로 받을 Port 번호
+      Protocol: UDP
+
+  MyDNS:
+    Type: AWS::Route53::HostedZone
+    Properties:
+      Name: park508.com
+      HostedZoneConfig:
+        Comment: Public hosted zone for park508.com
+
+  # ARecord:
+  #   Type: AWS::Route53::RecordSet
+  #   Properties:
+  #     Name: www.park508.com
+  #     Type: A
+  #     HostedZoneId: !Ref MyDNS
+  #     ResourceRecords:
+  #       - 43.201.175.138
+  #       - 15.164.44.94
+  #     TTL: 600
+
+  PrimaryHealthCheck:
+    Type: AWS::Route53::HealthCheck
+    Properties:
+      HealthCheckConfig:
+        IPAddress: !GetAtt MyEC21.PublicIp
+        Port: 80
+        Type: HTTP
+        ResourcePath: /index.html
+      HealthCheckTags:
+        - Key: Name
+          Value: Primary-Check
+
+  PrimaryRecordSet:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      Name: www.park508.com
+      Type: A
+      TTL: 30
+      HostedZoneId: !Ref MyDNS
+      ResourceRecords:
+        - !GetAtt MyEC21.PublicIp
+      Failover: PRIMARY
+      SetIdentifier: 1
+      HealthCheckId: !Ref PrimaryHealthCheck
+
+  SecondaryHealthCheck:
+    Type: AWS::Route53::HealthCheck
+    Properties:
+      HealthCheckConfig:
+        IPAddress: !GetAtt MyEC22.PublicIp
+        Port: 80
+        Type: HTTP
+        ResourcePath: /index.html
+      HealthCheckTags:
+        - Key: Name
+          Value: Secondary-Check
+
+  SecondaryRecordSet:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      Name: www.park508.com
+      Type: A
+      TTL: 30
+      HostedZoneId: !Ref MyDNS
+      ResourceRecords:
+        - !GetAtt MyEC22.PublicIp
+      Failover: SECONDARY
+      SetIdentifier: 2
+      HealthCheckId: !Ref SecondaryHealthCheck
+
+  ALBAlias:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      Name: test.park508.com
+      Type: A
+      HostedZoneId: !Ref MyDNS
+      AliasTarget:
+        DNSName: !GetAtt ALB.DNSName
+        HostedZoneId: !GetAtt ALB.CanonicalHostedZoneID
+
+  NLBAlias:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      Name: snmp.park508.com
+      Type: A
+      HostedZoneId: !Ref MyDNS
+      AliasTarget:
+        DNSName: !GetAtt NLB.DNSName
+        HostedZoneId: !GetAtt NLB.CanonicalHostedZoneID
+
+  MyEC21:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-0d6e6a06d11d7777d
+      InstanceType: t2.micro
+      KeyName: !Ref KeyName
+      Tags:
+        - Key: Name
+          Value: My-EC2-01
+      NetworkInterfaces:
+        - DeviceIndex: 0
+          NetworkInterfaceId: !Ref MyENI
+      UserData:
+        Fn::Base64:
+          !Sub |
+            #!/bin/bash
+            hostname My-EC2-01
+            amazon-linux-extras install epel -y
+            yum install httpd -y
+            systemctl enable --now httpd
+            echo "<h1>Test Web Server 1</h1>" > /var/www/html/index.html
+
+  MyEC22:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-0d6e6a06d11d7777d
+      InstanceType: t2.micro
+      KeyName: !Ref KeyName
+      Tags:
+        - Key: Name
+          Value: My-EC2-02
+      NetworkInterfaces:
+        - DeviceIndex: 0
+          NetworkInterfaceId: !Ref MyENI2
+      UserData:
+        Fn::Base64:
+          !Sub |
+            #!/bin/bash
+            hostname My-EC2-02
+            amazon-linux-extras install epel -y
+            yum install httpd -y
+            systemctl enable --now httpd
+            echo "<h1>Test Web Server 2</h1>" > /var/www/html/index.html

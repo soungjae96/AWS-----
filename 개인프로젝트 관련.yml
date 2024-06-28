@@ -1,0 +1,424 @@
+  WebVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      CidrBlock: 10.0.0.0/16
+      Tags:
+        - Key: Name
+          Value: Web-VPC
+
+  WebIGW:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: Web-IGW
+
+  WebIGWAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref WebIGW
+      VpcId: !Ref WebVPC
+
+  WebRT:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref WebVPC
+      Tags:
+        - Key: Name
+          Value: Web-RT
+
+  WebRT2:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref WebVPC
+      Tags:
+        - Key: Name
+          Value: Web-RT-Pri
+
+  WebRT3:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref WebVPC
+      Tags:
+        - Key: Name
+          Value: Web-RT-Pri2
+
+  WebRoute:
+    Type: AWS::EC2::Route
+    DependsOn: WebIGWAttachment
+    Properties:
+      RouteTableId: !Ref WebRT
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref WebIGW
+      
+  WebSN:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref WebVPC
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: 10.0.1.0/24
+      Tags:
+        - Key: Name
+          Value: WebSN-01
+
+  WebSN2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref WebVPC
+      AvailabilityZone: !Select [2, !GetAZs '']
+      CidrBlock: 10.0.2.0/24
+      Tags:
+        - Key: Name
+          Value: WebSN-02
+  
+  WebSN3:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref WebVPC
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: 10.0.3.0/24
+      Tags:
+        - Key: Name
+          Value: WebSN-03-Pri
+
+  WebSN4:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref WebVPC
+      AvailabilityZone: !Select [2, !GetAZs '']
+      CidrBlock: 10.0.4.0/24
+      Tags:
+        - Key: Name
+          Value: WebSN-04-Pri
+
+  WebSNRouteTableAssociation1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref WebRT
+      SubnetId: !Ref WebSN
+
+  WebSNRouteTableAssociation2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref WebRT
+      SubnetId: !Ref WebSN2
+
+  WebSNRouteTableAssociation3:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref WebRT2
+      SubnetId: !Ref WebSN3
+
+  WebSNRouteTableAssociation4:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref WebRT3
+      SubnetId: !Ref WebSN4
+
+  WebEndPoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      RouteTableIds:
+        - !Ref WebRT
+        - !Ref WebRT2
+        - !Ref WebRT3
+      VpcId: !Ref WebVPC
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.s3'
+
+  WebENI:
+    Type: AWS::EC2::NetworkInterface
+    Properties:
+      SubnetId: !Ref WebSN
+      Description: WebSN
+      GroupSet:
+      - !Ref WebSG
+      PrivateIpAddress: 10.0.1.100
+      Tags:
+        - Key: Name
+          Value: WebSN
+
+  WebENI2:
+    Type: AWS::EC2::NetworkInterface
+    Properties:
+      SubnetId: !Ref WebSN2
+      Description: WebSN2
+      GroupSet:
+      - !Ref WebSG
+      PrivateIpAddress: 10.0.2.100
+      Tags:
+        - Key: Name
+          Value: WebSN2
+
+  WebEIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+
+  WebEIP2:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+
+  WebAssociateEIP:
+    Type: AWS::EC2::EIPAssociation
+    DependsOn: WebEC21
+    Properties:
+      AllocationId: !GetAtt WebEIP.AllocationId
+      NetworkInterfaceId: !Ref WebENI
+
+  WebAssociateEIP2:
+    Type: AWS::EC2::EIPAssociation
+    DependsOn: WebEC22
+    Properties:
+      AllocationId: !GetAtt WebEIP2.AllocationId
+      NetworkInterfaceId: !Ref WebENI2
+
+  WebNATRoute:
+    Type: AWS::EC2::Route
+    DependsOn: WebEC21
+    Properties:
+      RouteTableId: !Ref WebRT2
+      DestinationCidrBlock: 0.0.0.0/0
+      NetworkInterfaceId: !Ref WebENI
+
+  WebNATRoute2:
+    Type: AWS::EC2::Route
+    DependsOn: WebEC22
+    Properties:
+      RouteTableId: !Ref WebRT3
+      DestinationCidrBlock: 0.0.0.0/0
+      NetworkInterfaceId: !Ref WebENI2
+
+  NLBTG:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: SNMP-TG
+      Port: 161       # 리스너에게 전달받을 Port 번호
+      Protocol: UDP
+      HealthCheckPort: 80  # 타겟에 헬스 체크 할 Port 번호
+      VpcId: !Ref WebVPC
+      Targets:
+        - Id: !Ref WebEC23
+          Port: 161        # 실제 타겟에 연결 해줄때 Port 번호
+        - Id: !Ref WebEC24
+          Port: 161        # 실제 타겟에 연결 해줄때 Port 번호
+#   만약 Port 번호를 8080으로 바꿨다면 8080으로 해줘야 함 
+  NLB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    DependsOn: WebIGWAttachment
+    Properties:
+      Type: network
+      Name: Web-NLB
+      Scheme: internet-facing
+      Subnets:
+        - !Ref WebSN
+        - !Ref WebSN2
+      Tags:
+        - Key: Name
+          Value: Web-NLB
+
+  NLBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref NLBTG
+      LoadBalancerArn: !Ref NLB
+      Port: 161       # 트래픽으로 받을 Port 번호
+      Protocol: UDP
+
+  ALBTG:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: ALB-TG
+      Port: 80
+      Protocol: HTTP 
+      # ALB를 만들때 HealthCheck 항목을 넣지 않으면 
+      # 설정한 기본트래픽 설정으로 체크함
+      VpcId: !Ref WebVPC
+      Targets:
+        - Id: !Ref WebEC23
+          Port: 80
+        - Id: !Ref WebEC24
+          Port: 80
+
+  DEVTG:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: DEV-TG
+      Port: 80
+      Protocol: HTTP
+      VpcId: !Ref WebVPC
+      Targets:
+        - Id: !Ref WebEC23
+          Port: 80
+
+  MGTTG:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: MGT-TG
+      Port: 80
+      Protocol: HTTP
+      VpcId: !Ref WebVPC
+      Targets:
+        - Id: !Ref WebEC24
+          Port: 80   
+
+  ALB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    DependsOn: WebIGWAttachment
+    Properties:
+      Name: Web-ALB
+      Scheme: internet-facing
+      Subnets:
+        - !Ref WebSN
+        - !Ref WebSN2
+      SecurityGroups:
+        - !Ref WebSG
+
+  ALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref ALBTG
+      LoadBalancerArn: !Ref ALB
+      Port: 80
+      Protocol: HTTP
+
+  ALBListenerRule1:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref DEVTG
+      Conditions:
+        - Field: path-pattern
+          Values:
+            - /dev/*
+      ListenerArn: !Ref ALBListener
+      Priority: 1
+
+  ALBListenerRule2:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref MGTTG
+      Conditions:
+        - Field: path-pattern
+          Values:
+            - /mgt/*
+      ListenerArn: !Ref ALBListener
+      Priority: 2
+
+  WebSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref WebVPC
+      GroupDescription: Enable HTTP access via port 80 and SSH access via port 22
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: 80
+        ToPort: 80
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        CidrIp: 0.0.0.0/0  
+      - IpProtocol: udp
+        FromPort: 161
+        ToPort: 161
+        CidrIp: 0.0.0.0/0  
+      - IpProtocol: icmp
+        FromPort: '-1'
+        ToPort: '-1'
+        CidrIp: 0.0.0.0/0
+
+  WebEC21:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-0c2d3e23e757b5d84
+      InstanceType: t2.micro
+      KeyName: !Ref KeyName
+      SourceDestCheck: False
+      Tags:
+        - Key: Name
+          Value: Web-EC2-01
+      NetworkInterfaces:
+        - DeviceIndex: 0
+          NetworkInterfaceId: !Ref WebENI
+
+  WebEC22:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-0c2d3e23e757b5d84
+      InstanceType: t2.micro
+      KeyName: !Ref KeyName
+      SourceDestCheck: False
+      Tags:
+        - Key: Name
+          Value: Web-EC2-02
+      NetworkInterfaces:
+        - DeviceIndex: 0
+          NetworkInterfaceId: !Ref WebENI2
+
+  WebEC23:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-0d6e6a06d11d7777d
+      InstanceType: t2.micro
+      KeyName: !Ref KeyName
+      Tags:
+        - Key: Name
+          Value: Pri-EC2-01
+      NetworkInterfaces:
+        - DeviceIndex: 0
+          SubnetId: !Ref WebSN3
+          GroupSet:
+            - !Ref WebSG
+      UserData:
+        Fn::Base64:
+          !Sub |
+            #!/bin/bash
+            hostname Web-EC2-Pri
+            amazon-linux-extras install epel -y
+            yum install httpd -y
+            systemctl enable --now httpd
+            echo "<h1>Test Web Server 1</h1>" > /var/www/html/index.html
+            mkdir /vat/www/html/dev/
+            echo "<h1>Dev</h1>" > /var/www/html/dev/index.html
+            install -y net-snmp net-snmp-utils
+
+  WebEC24:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-0d6e6a06d11d7777d
+      InstanceType: t2.micro
+      KeyName: !Ref KeyName
+      Tags:
+        - Key: Name
+          Value: Pri-EC2-02
+      NetworkInterfaces:
+        - DeviceIndex: 0
+          SubnetId: !Ref WebSN4
+          GroupSet:
+            - !Ref WebSG
+      UserData:
+        Fn::Base64:
+          !Sub |
+            #!/bin/bash
+            hostname Web-EC2-Pri2
+            amazon-linux-extras install epel -y
+            yum install httpd -y
+            systemctl enable --now httpd
+            echo "<h1>Test Web Server 2</h1>" > /var/www/html/index.html
+            mkdir /vat/www/html/mgt/
+            echo "<h1>Mgt</h1>" > /var/www/html/mgt/index.html
+            install -y net-snmp net-snmp-utils

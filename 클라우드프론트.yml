@@ -1,0 +1,127 @@
+Parameters:
+  KeyName:
+    Description: Name of an existing EC2 keyPair to enable SSH access to the instance
+    Type: AWS::EC2::KeyPair::KeyName
+    ConstraintDescription: must be the name of an existing EC2 KeyPair.
+    
+Resources:
+  SanpaVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      CidrBlock: 10.0.0.0/16
+      Tags:
+        - Key: Name
+          Value: Sanpa-VPC
+
+  SanpaIGW:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: Sanpa-IGW
+
+  SanpaIGWAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref SanpaIGW
+      VpcId: !Ref SanpaVPC
+
+  SanpaPublicRT:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref SanpaVPC
+      Tags:
+        - Key: Name
+          Value: Sanpa-public-RT
+
+  SanpaPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: SanpaIGWAttachment
+    Properties:
+      RouteTableId: !Ref SanpaPublicRT
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref SanpaIGW
+      
+  SanpaPublicSN:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref SanpaVPC
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: 10.0.0.0/24
+      Tags:
+        - Key: Name
+          Value: Sanpa-Public-SN-1
+  
+  SanpaPublicSNRouteTableAssociation1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref SanpaPublicRT
+      SubnetId: !Ref SanpaPublicSN
+
+  MySG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref SanpaVPC
+      GroupDescription: Enable HTTP access via port 80 and SSH access via port 22
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 80
+        ToPort: 80
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        CidrIp: 0.0.0.0/0
+        
+  SanpaDNS:
+    Type: AWS::Route53::HostedZone
+    Properties:
+      Name: park508.com
+      HostedZoneConfig:
+        Comment: Public hosted zone for park508.com
+
+  RecordSet:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      Name: www.park508.com
+      Type: A
+      TTL: 30
+      HostedZoneId: !Ref SanpaDNS  # 프라이빗 호스티드 존 이름을 사용
+      ResourceRecords:
+        - !GetAtt SanpaEC21.PublicIp
+
+  SanpaEC21:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-0d2b872bd98d125e5 # 상파울루 용 기본 ami
+      InstanceType: t2.micro
+      KeyName: !Ref KeyName
+      Tags:
+        - Key: Name
+          Value: Sanpa-Public-EC2
+      NetworkInterfaces:
+        - DeviceIndex: 0
+          SubnetId: !Ref SanpaPublicSN
+          GroupSet:
+            - !Ref MySG
+          AssociatePublicIpAddress: true
+      UserData:
+        Fn::Base64:
+          !Sub |
+            #!/bin/bash
+            amazon-linux-extras install epel -y
+            yum install httpd -y
+            systemctl enable --now httpd
+            echo "<h1>Test Web Server</h1>" > /var/www/html/index.html
+            wget https://cloudneta.github.io/test.jpg
+            wget -P /usr/share/nginx/html/ https://cloudneta.github.io/test.jpg
+            amazon-linux-extras install -y nginx1.12
+            echo "<head><link rel='icon' href='data:;base64,iVBORw0KGgo='></head><h1>CloudNet@ CloudFront Test 1 !!</h1><img src='test.jpg'>" > /usr/share/nginx/html/index.html
+            systemctl start nginx
+            systemctl enable nginx
