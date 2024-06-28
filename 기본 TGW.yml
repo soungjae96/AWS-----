@@ -1,0 +1,217 @@
+####################################################################
+# TGW
+  TransitGateway1:
+    Type: AWS::EC2::TransitGateway
+    Properties:
+     Tags:
+      - Key: Name
+        Value: TGW1
+####################################################################
+# TGW Attachment
+  # VPC 0
+  TransitGatewayAtt1:
+    Type: AWS::EC2::TransitGatewayAttachment
+    DependsOn: VPC0
+    Properties:
+      VpcId: !Ref VPC0
+      SubnetIds:
+        - !Ref VPC0PrivateSN
+        - !Ref VPC0PrivateSN2
+      TransitGatewayId: !Ref TransitGateway1
+      Tags:
+        - Key: Name
+          Value: TGW1-ATT1-VPC0
+  #VPC 1
+  TransitGatewayAtt2:
+    Type: AWS::EC2::TransitGatewayAttachment
+    DependsOn: VPC1
+    Properties:
+      VpcId: !Ref VPC1
+      SubnetIds:
+        - !Ref VPC1PrivateSN3
+        - !Ref VPC1PrivateSN4
+      TransitGatewayId: !Ref TransitGateway1
+      Tags:
+        - Key: Name
+          Value: TGW1-ATT1-VPC1
+  #VPC 2
+  TransitGatewayAtt3:
+    Type: AWS::EC2::TransitGatewayAttachment
+    DependsOn: VPC2
+    Properties:
+      VpcId: !Ref VPC2
+      SubnetIds:
+        - !Ref VPC2PrivateSN3
+        - !Ref VPC2PrivateSN4
+      TransitGatewayId: !Ref TransitGateway1
+      Tags:
+        - Key: Name
+          Value: TGW1-ATT1-VPC2
+####################################################################
+# VPC Route
+  # VPC 0
+  VPC0Route:
+    Type: AWS::EC2::Route
+    DependsOn: TransitGatewayAtt1
+    Properties:
+      RouteTableId: !Ref VPC0PublicRT
+      DestinationCidrBlock: 10.0.0.0/8
+      TransitGatewayId: !Ref TransitGateway1
+  # VPC 1
+  VPC1Route:
+    Type: AWS::EC2::Route
+    DependsOn: TransitGatewayAtt2
+    Properties:
+      RouteTableId: !Ref VPC1PrivateRT
+      DestinationCidrBlock: 10.0.0.0/8
+      TransitGatewayId: !Ref TransitGateway1
+  # VPC 2
+  VPC2Route:
+    Type: AWS::EC2::Route
+    DependsOn: TransitGatewayAtt3
+    Properties:
+      RouteTableId: !Ref VPC2PrivateRT
+      DestinationCidrBlock: 10.0.0.0/8
+      TransitGatewayId: !Ref TransitGateway1
+################################################################
+
+# 위는 기본형 TGW 만드는 법
+# 아래는 BLue, Red RT 을 추가해서 트래픽 제어
+
+################################################################
+# TGW
+  TransitGateway1:
+    Type: AWS::EC2::TransitGateway
+    Properties:
+     Tags:
+      - Key: Name
+        Value: TGW1
+###################################################################
+# TGW RT
+  # Blue RT
+  TransitGatewayRT2:
+    Type: AWS::EC2::TransitGatewayRouteTable
+    Properties:
+      Tags:
+        - Key: Name
+          Value: TGW-Blue-RT
+      TransitGatewayId: !Ref TransitGateway1
+  # Red RT
+  TransitGatewayRT3:
+    Type: AWS::EC2::TransitGatewayRouteTable
+    Properties:
+      Tags:
+        - Key: Name
+          Value: TGW-Red-RT
+      TransitGatewayId: !Ref TransitGateway1
+###################################################################
+# TGW RT Attachement
+  TransitATTRT1:
+    Type: AWS::EC2::TransitGatewayRouteTableAssociation
+    Properties:
+      TransitGatewayAttachmentId: !Ref TransitGatewayAtt2
+      TransitGatewayRouteTableId: !Ref TransitGatewayRT2
+  TransitATTRT2:
+    Type: AWS::EC2::TransitGatewayRouteTableAssociation
+    Properties:
+      TransitGatewayAttachmentId: !Ref TransitGatewayAtt3
+      TransitGatewayRouteTableId: !Ref TransitGatewayRT3
+###################################################################
+# TGW RT 경로 전파
+  # Blue RT 전파
+  TransitRTPropagation1:
+    Type: AWS::EC2::TransitGatewayRouteTablePropagation
+    Properties:
+      TransitGatewayAttachmentId: !Ref TransitGatewayAtt2
+      TransitGatewayRouteTableId: !Ref TransitGatewayRT2
+  TransitRTPropagation2:
+    Type: AWS::EC2::TransitGatewayRouteTablePropagation
+    Properties:
+      TransitGatewayAttachmentId: !Ref TransitGatewayAtt1
+      TransitGatewayRouteTableId: !Ref TransitGatewayRT2
+  # Red RT 전파
+  TransitRTPropagation3:
+    Type: AWS::EC2::TransitGatewayRouteTablePropagation
+    Properties:
+      TransitGatewayAttachmentId: !Ref TransitGatewayAtt3
+      TransitGatewayRouteTableId: !Ref TransitGatewayRT3
+  TransitRTPropagation4:
+    Type: AWS::EC2::TransitGatewayRouteTablePropagation
+    Properties:
+      TransitGatewayAttachmentId: !Ref TransitGatewayAtt1
+      TransitGatewayRouteTableId: !Ref TransitGatewayRT3
+###################################################################
+# TGW Attachment
+  # VPC 0
+  TransitGatewayAtt1:
+    Type: AWS::EC2::TransitGatewayAttachment
+    DependsOn: VPC0
+    Properties:
+      VpcId: !Ref VPC0
+      SubnetIds:
+        - !Ref VPC0PrivateSN
+        - !Ref VPC0PrivateSN2
+      TransitGatewayId: !Ref TransitGateway1
+      Tags:
+        - Key: Name
+          Value: TGW1-ATT1-VPC0
+  #VPC 1
+  TransitGatewayAtt2:
+    Type: AWS::EC2::TransitGatewayAttachment
+    DependsOn: VPC1
+    Properties:
+      VpcId: !Ref VPC1
+      SubnetIds:
+        - !Ref VPC1PrivateSN3
+        - !Ref VPC1PrivateSN4
+      TransitGatewayId: !Ref TransitGateway1
+      Tags:
+        - Key: Name
+          Value: TGW1-ATT1-VPC1
+  #VPC 2
+  TransitGatewayAtt3:
+    Type: AWS::EC2::TransitGatewayAttachment
+    DependsOn: VPC2
+    Properties:
+      VpcId: !Ref VPC2
+      SubnetIds:
+        - !Ref VPC2PrivateSN3
+        - !Ref VPC2PrivateSN4
+      TransitGatewayId: !Ref TransitGateway1
+      Tags:
+        - Key: Name
+          Value: TGW1-ATT1-VPC2
+###################################################################
+# VPC Route
+  # VPC 0
+  VPC0Route:
+    Type: AWS::EC2::Route
+    DependsOn: TransitGatewayAtt1
+    Properties:
+      RouteTableId: !Ref VPC0PublicRT
+      DestinationCidrBlock: 10.0.0.0/8
+      TransitGatewayId: !Ref TransitGateway1
+  # VPC 1
+  VPC1Route:
+    Type: AWS::EC2::Route
+    DependsOn: TransitGatewayAtt2
+    Properties:
+      RouteTableId: !Ref VPC1PrivateRT
+      DestinationCidrBlock: 10.0.0.0/8
+      TransitGatewayId: !Ref TransitGateway1
+  # VPC 2
+  VPC2Route:
+    Type: AWS::EC2::Route
+    DependsOn: TransitGatewayAtt3
+    Properties:
+      RouteTableId: !Ref VPC2PrivateRT
+      DestinationCidrBlock: 10.0.0.0/8
+      TransitGatewayId: !Ref TransitGateway1
+  # Black Hole
+  BlackholeRT:
+    Type: AWS::EC2::TransitGatewayRoute
+    Properties:
+      Blackhole: true
+      DestinationCideBlock: 10.20.2.0/24
+      TransitGatewayRouteTableId: tgw-rtb-024fd0e2c264b230f
+      # 위 RT Id 는 하드코딩 해야함 ( 기본 RT Id )

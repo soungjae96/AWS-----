@@ -1,0 +1,113 @@
+# 코드로 DNS 호스트영역 만드는건데 콘솔로 만들어놓고 계속 씀
+  MyDNS:
+    Type: AWS::Route53::HostedZone
+    Properties:
+      Name: park508.com
+      HostedZoneConfig:
+        Comment: Public hosted zone for park508.com
+
+#==========================================================
+# 기본 A 레코드 설정 ( 단순 분산 )
+
+  ARecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      Name: www.park508.com
+      Type: A
+      HostedZoneId: !Ref MyDNS
+      ResourceRecords:
+        - !GetAtt SanpaEC21.PublicIp
+      TTL: 600
+
+#===========================================================
+# 장애 조치 헬스체크 및 레코드 셋
+
+  PrimaryHealthCheck:
+    Type: AWS::Route53::HealthCheck
+    Properties:
+      HealthCheckConfig:
+        IPAddress: !GetAtt MyEC21.PublicIp
+        Port: 80
+        Type: HTTP
+        ResourcePath: /index.html
+      HealthCheckTags:
+        - Key: Name
+          Value: Primary-Check
+
+  PrimaryRecordSet:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      Name: www.park508.com
+      Type: A
+      TTL: 30
+      HostedZoneId: !Ref MyDNS
+      ResourceRecords:
+        - !GetAtt MyEC21.PublicIp
+      Failover: PRIMARY
+      SetIdentifier: 1
+      HealthCheckId: !Ref PrimaryHealthCheck
+
+  SecondaryHealthCheck:
+    Type: AWS::Route53::HealthCheck
+    Properties:
+      HealthCheckConfig:
+        IPAddress: !GetAtt MyEC22.PublicIp
+        Port: 80
+        Type: HTTP
+        ResourcePath: /index.html
+      HealthCheckTags:
+        - Key: Name
+          Value: Secondary-Check
+
+  SecondaryRecordSet:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      Name: www.park508.com
+      Type: A
+      TTL: 30
+      HostedZoneId: !Ref MyDNS
+      ResourceRecords:
+        - !GetAtt MyEC22.PublicIp
+      Failover: SECONDARY
+      SetIdentifier: 2
+      HealthCheckId: !Ref SecondaryHealthCheck
+
+#======================================================
+# 알리아스를 이용해 LoadBalancer 에 부착시키기
+  
+  ALBAlias:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      Name: test.park508.com
+      Type: A
+      HostedZoneId: !Ref MyDNS
+      AliasTarget:
+        DNSName: !GetAtt ALB.DNSName # 본인 ALB 로지컬 ID
+        HostedZoneId: !GetAtt ALB.CanonicalHostedZoneID
+
+#=======================================================
+#프라이빗 DNS 생성
+
+  PrivateDNS:
+    Type: AWS::Route53::HostedZone
+    DependsOn: AWSVPC
+    Properties:
+      HostedZoneConfig:
+        Comment: Private hosted zone for awsneta.net
+      Name: awsneta.internal
+      VPCs:
+        - VPCId: !Ref AWSVPC
+          VPCRegion: ap-northeast-2
+      HostedZoneTags:
+        - Key: Name
+          Value: awsnetadomain
+
+  PrivateRecordSet:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      Name: websrv1.awsneta.internal
+      Type: A
+      TTL: 30
+      HostedZoneId: !Ref MyDNS  # 프라이빗 호스티드 존 이름을 사용
+      ResourceRecords:
+        - !GetAtt MyEC2Instance.PrivateIp

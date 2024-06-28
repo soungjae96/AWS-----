@@ -1,0 +1,54 @@
+###############################################################
+# VGW 생성
+  VPC2VPNGW:
+    Type: AWS::EC2::VPNGateway
+    Properties:
+      Type: ipsec.1
+      Tags:
+        - Key: Name
+          Value: AWS-VPNGW
+  VPC2AttachVPNGW:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref AWSVPC
+      VpnGatewayId: !Ref VPC2VPNGW
+###############################################################
+# CGW 생성
+  VPC2CGW:
+    Type: AWS::EC2::CustomerGateway
+    Properties:
+      Type: ipsec.1
+      BgpAsn: 65000
+      IpAddress: !Ref IDCNATEIP1
+      Tags:
+        - Key: Name
+          Value: IDC-VPN-CGW
+###############################################################
+# VPN 커넥션생성 
+  VPCAWSVpnConnection:
+    Type: AWS::EC2::VPNConnection
+    Properties:
+      Type: ipsec.1
+      CustomerGatewayId: !Ref VPC2CGW
+      VpnGatewayId: !Ref VPC2VPNGW
+      VpnTunnelOptionsSpecifications:
+        - PreSharedKey: cloudneta
+        - PreSharedKey: cloudneta
+      StaticRoutesOnly: True
+      Tags:
+        - Key: Name
+          Value: AWS-VPNConnection-IDC
+###############################################################
+# VPN 정적경로 생성
+  VPCAWSVpnConnectionRoute:
+    Type: AWS::EC2::VPNConnectionRoute
+    Properties:
+      DestinationCidrBlock: 10.60.0.0/16
+      VpnConnectionId: !Ref VPCAWSVpnConnection
+  VPNAWSGatewayRoutePropagation:
+    Type: AWS::EC2::VPNGatewayRoutePropagation
+    DependsOn: VPCAWSVpnConnection
+    Properties:
+      RouteTableIds:
+        - !Ref AWSPublicRT
+      VpnGatewayId: !Ref VPC2VPNGW

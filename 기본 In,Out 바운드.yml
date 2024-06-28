@@ -1,0 +1,62 @@
+  VPCPeering:
+    Type: AWS::EC2::VPCPeeringConnection
+    Properties:
+      Vpcid: !Ref VPC1
+      PeerVpcId: !Ref VP2
+      Tags:
+      - Key: Name
+        Value: VPCPeering
+
+# 인바운드 엔드 포인트
+
+  InboundEP:
+    Type: AWS::Route53Resolver::ResolverEndpoint
+    Properties:
+      Direction: INBOUND
+      IpAddresses:
+        - Ip: 10.70.1.250
+          SubnetId: !Ref AWSPublicSN
+        - Ip: 10.70.2.250
+          SubnetId: !Ref AWSPublicSN2
+      SecurityGroupIds:
+        - !Ref AWSSG
+      Tags:
+        - Key: Name
+          Value: idc-to-aws-inbound
+
+# 아웃바운드 엔드 포인트
+
+  OutboundEP:
+    Type: AWS::Route53Resolver::ResolverEndpoint
+    Properties:
+      Direction: OUTBOUND
+      IpAddresses:
+        - Ip: 10.70.1.251
+          SubnetId: !Ref AWSPublicSN
+        - Ip: 10.70.2.251
+          SubnetId: !Ref AWSPublicSN2
+      SecurityGroupIds:
+        - !Ref AWSSG
+      Tags:
+        - Key: Name
+          Value: aws-to-idc-outbound
+
+# 포워더 룰
+
+  ForwardRule:
+    Type: AWS::Route53Resolver::ResolverRule
+    Properties:
+      DomainName: idcneta.internal
+      Name: IDC-TO-AWS_ForwardRule
+      ResolverEndpointId: !Ref OutboundEP
+      RuleType: FORWARD
+      TargetIps:
+        - Ip: 10.80.1.200
+          Port: 53
+
+  ResolverRuleAssociation:
+    Type: AWS::Route53Resolver::ResolverRuleAssociation
+    Properties:
+      Name: Resolver-Rule-Association
+      ResolverRuleId: !Ref ForwardRule
+      VPCId: !Ref AWSVPC

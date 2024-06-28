@@ -1,0 +1,42 @@
+  EndPoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      RouteTableIds:
+        - !Ref PubRT
+        - !Ref PriRT
+      VpcId: !Ref VPC1
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.s3'
+
+  EndPoint1:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref VPC1
+      VpcEndpointType: 'Interface'
+      PrivateDnsEnabled: true
+      SubnetIds:
+        - !Ref PubSubnet
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.cloudformation'
+
+
+# 아래는 로드 발란서랑 쓰는 법
+# 엔드 포인트 서비스 연동할 땐 서브넷 하나만 연동 됨    %
+
+  EndpointService:
+    Type: AWS::EC2::VPCEndpointService
+    Properties:
+      NetworkLoadBalancerArns:
+        - !Ref CustomNLB
+      AcceptanceRequired: False
+
+  Endpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref VPC1
+      VpcEndpointType: 'Interface'
+      SubnetIds:
+        - !Ref PubSubnet   #  ←이 부분을 말하는 것        %
+      SecurityGroupIds:
+        - !Ref MySG
+      ServiceName: !Sub
+        - 'com.amazonaws.vpce.${AWS::Region}.${EndpointService}'
+        - EndpointService: !Ref EndpointService

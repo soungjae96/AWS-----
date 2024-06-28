@@ -1,0 +1,84 @@
+  ALBTG:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: ALB-TG
+      Port: 80
+      Protocol: HTTP 
+      # ALB를 만들때 HealthCheck 항목을 넣지 않으면 
+      # 설정한 기본트래픽 설정으로 체크함
+      VpcId: !Ref ELBVPC
+      Targets:
+        - Id: !Ref ELBEC21
+          Port: 80
+        - Id: !Ref ELBEC22
+          Port: 80
+
+  DEVTG:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: DEV-TG
+      Port: 80
+      Protocol: HTTP
+      VpcId: !Ref ELBVPC
+      Targets:
+        - Id: !Ref ELBEC21
+          Port: 80
+
+  MGTTG:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: MGT-TG
+      Port: 80
+      Protocol: HTTP
+      VpcId: !Ref ELBVPC
+      Targets:
+        - Id: !Ref ELBEC22
+          Port: 80   
+
+  ALB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    DependsOn: ELBIGWAttachment
+    Properties:
+      Name: My-ALB
+      Scheme: internet-facing
+      Subnets:
+        - !Ref ELBSN
+        - !Ref ELBSN2
+      SecurityGroups:
+        - !Ref MySG
+
+  ALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref ALBTG
+      LoadBalancerArn: !Ref ALB
+      Port: 80
+      Protocol: HTTP
+
+  ALBListenerRule1:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref DEVTG
+      Conditions:
+        - Field: path-pattern
+          Values:
+            - /dev/*
+      ListenerArn: !Ref ALBListener
+      Priority: 1
+
+  ALBListenerRule2:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref MGTTG
+      Conditions:
+        - Field: path-pattern
+          Values:
+            - /mgt/*
+      ListenerArn: !Ref ALBListener
+      Priority: 2

@@ -1,0 +1,23 @@
+  NATGateWay:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt EIP.AllocationId
+      SubnetId: !Ref CloudNetaPublicSN1 #서브넷 ID 넣기
+      Tags:
+        - Key: Name
+          Value: NAT-Gateway
+
+  EIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+
+  NATRoute:
+    Type: AWS::EC2::Route
+    DependsOn: NATGateWay
+    Properties:
+      RouteTableId: !Ref CloudNetaPrivateRT # 프라이빗 라우팅테이블 Id
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref NATGateWay
+
+# 이 내용은 AWS NATGateway 를 이용해서 NAT 만드는 법

@@ -1,0 +1,48 @@
+Conditions:
+  CreateSydneyResources: !Equals [ !Ref 'AWS::Region', ap-southeast-2 ]
+  CreateSanpaResources: !Equals [ !Ref 'AWS::Region', sa-east-1 ]
+# 위 문구는 [] 안에 있는 조건이 참이면 리소스 만들기
+# 위 문구의 뜻은 리전이 ap-southeast-2 일때 만든다는 뜻
+
+# GA
+  GlobalAccelerator:
+    Type: AWS::GlobalAccelerator::Accelerator
+    Condition: CreateSydneyResources
+    Properties:
+      Name: !Sub '${AWS::StackName}'
+      Enabled: true
+      IpAddressType: IPV4
+
+# GA 는 글로벌 서비스라서 조건을 안붙이면 2번 생성되기 때문에
+# condition 조건을 넣은 것
+
+  GAListener:
+    Type: AWS::GlobalAccelerator::Listener
+    Condition: CreateSydneyResources
+    Properties:
+      AcceleratorArn: !Ref GlobalAccelerator
+      Protocol: TCP
+      PortRanges:
+        - FromPort: 80
+          ToPort: 80
+
+  GAEndpointGroup1:
+    Type: AWS::GlobalAccelerator::EndpointGroup
+    Condition: CreateSydneyResources
+    DependsOn: ApplicationLoadBalancer
+    Properties:
+      ListenerArn: !Ref GAListener
+      EndpointGroupRegion: !Ref AWS::Region
+      EndpointConfigurations:
+        - EndpointId: !Ref ApplicationLoadBalancer
+        
+  GAEndpointGroup2:
+    Type: AWS::GlobalAccelerator::EndpointGroup
+    Condition: CreateSanpaResources
+    Properties:
+      ListenerArn: # 여기는  먼저 시드니쪽에 배포를 하고 
+                # 만들어진 Listener 의 Arn 을 하드코딩 해야함
+      EndpointGroupRegion: !Ref AWS::Region
+      EndpointConfigurations:
+        - EndpointId: !Ref MyEC21
+        - EndpointId: !Ref MyEC22

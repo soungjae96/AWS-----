@@ -1,0 +1,37 @@
+  NLBTG:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: NLB-TG
+      Port: 80       # 리스너에게 전달받을 Port 번호
+      Protocol: TCP  # 리스너에게 전달받을 Protocol 타입
+      HealthCheckPort: 80  # 타겟에 헬스 체크 할 Port 번호
+      VpcId: !Ref ELBVPC
+      Targets:
+        - Id: !Ref ELBEC21
+          Port: 80        # 실제 타겟에 연결 해줄때 Port 번호
+        - Id: !Ref ELBEC22
+          Port: 80        # 실제 타겟에 연결 해줄때 Port 번호
+#   만약 Port 번호를 8080으로 바꿨다면 8080으로 해줘야 함 
+  NLB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    DependsOn: ELBIGWAttachment
+    Properties:
+      Type: network
+      Name: My-NLB
+      Scheme: internet-facing
+      Subnets:
+        - !Ref ELBSN
+        - !Ref ELBSN2
+      Tags:
+        - Key: Name
+          Value: Custom-NLB
+
+  NLBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref NLBTG
+      LoadBalancerArn: !Ref NLB
+      Port: 80       # 트래픽으로 받을 Port 번호
+      Protocol: TCP
