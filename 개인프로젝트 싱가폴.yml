@@ -656,29 +656,29 @@ Resources:
       TransitGatewayId: !Ref TGW1
 ####################################################################
 ##############서울과 싱가폴 모두 TGW 생성 후에 하드코딩############
-# 서울 TGW + 싱가폴 TGW ATT 
-  TransitGatewayPeeringAttachment:
-    Type: 'AWS::EC2::TransitGatewayPeeringAttachment'
-    Properties:
-      TransitGatewayId: !Ref TGW1 
-      PeerTransitGatewayId: tgw-068c0599ff961d7b6  # 리전 A의 TGW ID 하드코딩
-      PeerRegion: 'ap-northeast-2' # 리전 A의 리전 코드
-      PeerAccountId: 992382759440
-###########서울과 싱가폴 ATT 완료 후 생성 후에 하드코딩############
-  # 서울 AWS TGW 로 가는 경로
-  TransitGatewayRoute:
-    Type: 'AWS::EC2::TransitGatewayRoute'
-    Properties:
-      TransitGatewayRouteTableId: tgw-rtb-09d43fe707b7e4c59
-      DestinationCidrBlock: '10.1.0.0/16'  # 리전 B VPC의 CIDR 블록
-      TransitGatewayAttachmentId: tgw-attach-0ea19962adfb1e2be
-  # 서울 IDC TGW 로 가는 경로
-  TransitGatewayRoute2:
-    Type: 'AWS::EC2::TransitGatewayRoute'
-    Properties:
-      TransitGatewayRouteTableId: tgw-rtb-09d43fe707b7e4c59
-      DestinationCidrBlock: '10.2.0.0/16'  # 리전 B VPC의 CIDR 블록
-      TransitGatewayAttachmentId: tgw-attach-0ea19962adfb1e2be
+# # 서울 TGW + 싱가폴 TGW ATT 
+#   TransitGatewayPeeringAttachment:
+#     Type: 'AWS::EC2::TransitGatewayPeeringAttachment'
+#     Properties:
+#       TransitGatewayId: !Ref TGW1 
+#       PeerTransitGatewayId: tgw-068c0599ff961d7b6  # 리전 A의 TGW ID 하드코딩
+#       PeerRegion: 'ap-northeast-2' # 리전 A의 리전 코드
+#       PeerAccountId: 992382759440
+# ###########서울과 싱가폴 ATT 완료 후 생성 후에 하드코딩############
+#   # 서울 AWS TGW 로 가는 경로
+#   TransitGatewayRoute:
+#     Type: 'AWS::EC2::TransitGatewayRoute'
+#     Properties:
+#       TransitGatewayRouteTableId: tgw-rtb-09d43fe707b7e4c59
+#       DestinationCidrBlock: '10.1.0.0/16'  # 리전 B VPC의 CIDR 블록
+#       TransitGatewayAttachmentId: tgw-attach-0ea19962adfb1e2be
+#   # 서울 IDC TGW 로 가는 경로
+#   TransitGatewayRoute2:
+#     Type: 'AWS::EC2::TransitGatewayRoute'
+#     Properties:
+#       TransitGatewayRouteTableId: tgw-rtb-09d43fe707b7e4c59
+#       DestinationCidrBlock: '10.2.0.0/16'  # 리전 B VPC의 CIDR 블록
+#       TransitGatewayAttachmentId: tgw-attach-0ea19962adfb1e2be
 ##############서울과 싱가폴 모두 TGW 생성 후에 하드코딩############
 ####################################################################
 # CGW
@@ -708,83 +708,83 @@ Resources:
           Value: TGW-VPNConnection-CGW
 ####################################################################
 # DNS
-  SingaporeDNS:
-    Type: AWS::Route53::HostedZone
-    DependsOn: SingaporeVPC
-    Properties:
-      HostedZoneConfig:
-        Comment: Private hosted zone for singapore.internal
-      Name: singapore.internal
-      VPCs:
-        - VPCId: !Ref SingaporeVPC
-          VPCRegion: ap-southeast-1
-      HostedZoneTags:
-        - Key: Name
-          Value: Singaporedomain
-  # Singapore 레코드 셋 1
-  SingaporeRecordSet:
-    Type: AWS::Route53::RecordSet
-    Properties:
-      Name: websrv1.singapore.internal
-      Type: A
-      TTL: 30
-      HostedZoneId: !Ref SingaporeDNS  # 프라이빗 호스티드 존 이름을 사용
-      ResourceRecords:
-        - !GetAtt Instance3.PrivateIp
-  # Singapore 레코드 셋 2  
-  SingaporeRecordSet2:
-    Type: AWS::Route53::RecordSet
-    Properties:
-      Name: websrv2.singapore.internal
-      Type: A
-      TTL: 30
-      HostedZoneId: !Ref SingaporeDNS  # 프라이빗 호스티드 존 이름을 사용
-      ResourceRecords:
-        - 10.3.4.100
-####################################################################
-# Route 53 인바운드 엔드포인트
-  # Singapore 인바운드 엔드포인트
-  InboundEndpoint:
-    Type: 'AWS::Route53Resolver::ResolverEndpoint'
-    Properties:
-      Direction: INBOUND
-      SecurityGroupIds:
-        - !Ref SingaporeSG  # 보안 그룹 ID를 여기에 입력하세요
-      IpAddresses:
-        - SubnetId: !Ref Subnet3  # 첫 번째 서브넷 ID를 여기에 입력하세요
-          Ip: '10.3.3.250'            # IP 주소를 여기에 입력하세요
-        - SubnetId: !Ref Subnet4  # 두 번째 서브넷 ID를 여기에 입력하세요
-          Ip: '10.3.4.250'            # IP 주소를 여기에 입력하세요
-      Name: 'MyInboundEndpoint'
-####################################################################
-# Route 53 아웃바운드 엔드포인트
-  # Singapore 아웃바운드 엔드포인트
-  OutboundEndpoint:
-    Type: 'AWS::Route53Resolver::ResolverEndpoint'
-    Properties:
-      Direction: OUTBOUND
-      SecurityGroupIds:
-        - !Ref SingaporeSG  # 보안 그룹 ID를 여기에 입력하세요
-      IpAddresses:
-        - SubnetId: !Ref Subnet3  # 첫 번째 서브넷 ID를 여기에 입력하세요
-          Ip: '10.3.3.150'            # IP 주소를 여기에 입력하세요
-        - SubnetId: !Ref Subnet3  # 두 번째 서브넷 ID를 여기에 입력하세요
-          Ip: '10.3.3.151'            # IP 주소를 여기에 입력하세요
-      Name: 'Singapore-OutboundEndpoint'
-  # Singapore 아웃바운드 규칙
-  SingaporeResolverRule:
-    Type: 'AWS::Route53Resolver::ResolverRule'
-    Properties:
-      DomainName: 'idc-singapore.internal'  # 도메인 이름을 여기에 입력하세요
-      RuleType: FORWARD
-      ResolverEndpointId: !Ref OutboundEndpoint
-      TargetIps:
-        - Ip: '10.4.1.200'  # 타겟 DNS 서버 IP를 여기에 입력하세요
-      Name: 'SingaporeResolverRule'
-  # Singapore 아웃바운드 규칙 ASS
-  ResolverRuleAssociation:
-    Type: AWS::Route53Resolver::ResolverRuleAssociation
-    Properties:
-      Name: Resolver-Rule-Association
-      ResolverRuleId: !Ref SingaporeResolverRule
-      VPCId: !Ref SingaporeVPC
+#   SingaporeDNS:
+#     Type: AWS::Route53::HostedZone
+#     DependsOn: SingaporeVPC
+#     Properties:
+#       HostedZoneConfig:
+#         Comment: Private hosted zone for singapore.internal
+#       Name: singapore.internal
+#       VPCs:
+#         - VPCId: !Ref SingaporeVPC
+#           VPCRegion: ap-southeast-1
+#       HostedZoneTags:
+#         - Key: Name
+#           Value: Singaporedomain
+#   # Singapore 레코드 셋 1
+#   SingaporeRecordSet:
+#     Type: AWS::Route53::RecordSet
+#     Properties:
+#       Name: websrv1.singapore.internal
+#       Type: A
+#       TTL: 30
+#       HostedZoneId: !Ref SingaporeDNS  # 프라이빗 호스티드 존 이름을 사용
+#       ResourceRecords:
+#         - !GetAtt Instance3.PrivateIp
+#   # Singapore 레코드 셋 2  
+#   SingaporeRecordSet2:
+#     Type: AWS::Route53::RecordSet
+#     Properties:
+#       Name: websrv2.singapore.internal
+#       Type: A
+#       TTL: 30
+#       HostedZoneId: !Ref SingaporeDNS  # 프라이빗 호스티드 존 이름을 사용
+#       ResourceRecords:
+#         - 10.3.4.100
+# ####################################################################
+# # Route 53 인바운드 엔드포인트
+#   # Singapore 인바운드 엔드포인트
+#   InboundEndpoint:
+#     Type: 'AWS::Route53Resolver::ResolverEndpoint'
+#     Properties:
+#       Direction: INBOUND
+#       SecurityGroupIds:
+#         - !Ref SingaporeSG  # 보안 그룹 ID를 여기에 입력하세요
+#       IpAddresses:
+#         - SubnetId: !Ref Subnet3  # 첫 번째 서브넷 ID를 여기에 입력하세요
+#           Ip: '10.3.3.250'            # IP 주소를 여기에 입력하세요
+#         - SubnetId: !Ref Subnet4  # 두 번째 서브넷 ID를 여기에 입력하세요
+#           Ip: '10.3.4.250'            # IP 주소를 여기에 입력하세요
+#       Name: 'MyInboundEndpoint'
+# ####################################################################
+# # Route 53 아웃바운드 엔드포인트
+#   # Singapore 아웃바운드 엔드포인트
+#   OutboundEndpoint:
+#     Type: 'AWS::Route53Resolver::ResolverEndpoint'
+#     Properties:
+#       Direction: OUTBOUND
+#       SecurityGroupIds:
+#         - !Ref SingaporeSG  # 보안 그룹 ID를 여기에 입력하세요
+#       IpAddresses:
+#         - SubnetId: !Ref Subnet3  # 첫 번째 서브넷 ID를 여기에 입력하세요
+#           Ip: '10.3.3.150'            # IP 주소를 여기에 입력하세요
+#         - SubnetId: !Ref Subnet3  # 두 번째 서브넷 ID를 여기에 입력하세요
+#           Ip: '10.3.3.151'            # IP 주소를 여기에 입력하세요
+#       Name: 'Singapore-OutboundEndpoint'
+#   # Singapore 아웃바운드 규칙
+#   SingaporeResolverRule:
+#     Type: 'AWS::Route53Resolver::ResolverRule'
+#     Properties:
+#       DomainName: 'idc-singapore.internal'  # 도메인 이름을 여기에 입력하세요
+#       RuleType: FORWARD
+#       ResolverEndpointId: !Ref OutboundEndpoint
+#       TargetIps:
+#         - Ip: '10.4.1.200'  # 타겟 DNS 서버 IP를 여기에 입력하세요
+#       Name: 'SingaporeResolverRule'
+#   # Singapore 아웃바운드 규칙 ASS
+#   ResolverRuleAssociation:
+#     Type: AWS::Route53Resolver::ResolverRuleAssociation
+#     Properties:
+#       Name: Resolver-Rule-Association
+#       ResolverRuleId: !Ref SingaporeResolverRule
+#       VPCId: !Ref SingaporeVPC
